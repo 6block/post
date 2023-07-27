@@ -5,7 +5,6 @@ import (
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/shared"
 )
 
 type option struct {
@@ -48,11 +47,11 @@ func WithDataSource(cfg config.Config, nodeId, commitmentAtxId []byte, datadir s
 			return err
 		}
 
-		if ok, err := initCompleted(datadir, m.NumUnits, cfg.LabelsPerUnit); err != nil {
-			return err
-		} else if !ok {
-			return shared.ErrInitNotCompleted
-		}
+		// if ok, err := initCompleted(datadir, m.NumUnits, cfg.LabelsPerUnit); err != nil {
+		// 	return err
+		// } else if !ok {
+		// 	return shared.ErrInitNotCompleted
+		// }
 
 		o.datadir = datadir
 		o.nodeId = nodeId

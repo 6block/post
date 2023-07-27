@@ -1,4 +1,4 @@
-module github.com/spacemeshos/post
+module github.com/6block/post
 
 go 1.19
 
