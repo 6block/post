@@ -127,6 +127,7 @@ type InitOpts struct {
 	NumUnits    uint32
 	MaxFileSize uint64
 	ProviderID  *uint32
+	ProviderIDs *[]uint64
 	Throttle    bool
 	Scrypt      ScryptParams
 	// ComputeBatchSize must be greater than 0
