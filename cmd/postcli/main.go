@@ -66,6 +66,8 @@ func parseFlags() {
 
 	flag.StringVar(&opts.DataDir, "datadir", opts.DataDir, "filesystem datadir path")
 	flag.Uint64Var(&opts.MaxFileSize, "maxFileSize", opts.MaxFileSize, "max file size")
+	var providerIDs providerIds
+	flag.Var(&providerIDs, "providers", "compute provider id list e.g 0,1,2")
 	var providerID uint64
 	flag.Uint64Var(&providerID, "provider", math.MaxUint64, "compute provider id (required)")
 	flag.Uint64Var(&cfg.LabelsPerUnit, "labelsPerUnit", cfg.LabelsPerUnit, "the number of labels per unit")
@@ -88,13 +90,30 @@ func parseFlags() {
 		opts.ProviderID = new(uint32)
 		*opts.ProviderID = uint32(providerID)
 	}
+	if len(providerIDs) > 0 {
+		opts.ProviderIDs = (*[]uint64)(&providerIDs)
+	}
 
 	opts.NumUnits = uint32(*numUnits) // workaround the missing type support for uint32
 }
 
 func processFlags() error {
-	if opts.ProviderID == nil {
-		return errors.New("-provider flag is required")
+	if opts.ProviderID == nil && opts.ProviderIDs == nil {
+		providers, err := postrs.OpenCLProviders()
+		if err != nil {
+			return fmt.Errorf("failed to spcecify provider id: %w", err)
+		}
+		var gpuProviders []uint64
+		for _, v := range providers {
+			if v.DeviceType == postrs.ClassGPU {
+				gpuProviders = append(gpuProviders, uint64(v.ID))
+			}
+		}
+		if len(gpuProviders) > 0 {
+			opts.ProviderIDs = &gpuProviders
+		} else {
+			return fmt.Errorf("no gpu available")
+		}
 	}
 
 	if commitmentAtxIdHex == "" {
@@ -110,7 +129,8 @@ func processFlags() error {
 		return errors.New("-id flag is required when using -fromFile or -toFile")
 	}
 
-	if idHex == "" {
+	loadId := load_pubkey()
+	if idHex == "" && loadId == nil {
 		pub, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {
 			return fmt.Errorf("failed to generate identity: %w", err)
@@ -119,10 +139,20 @@ func processFlags() error {
 		log.Printf("cli: generated id %x\n", id)
 		return saveKey(priv)
 	}
-	id, err = hex.DecodeString(idHex)
-	if err != nil {
-		return fmt.Errorf("invalid id: %w", err)
+	if idHex != "" {
+		id, err = hex.DecodeString(idHex)
+		if err != nil {
+			return fmt.Errorf("invalid id: %w", err)
+		}
+		if loadId != nil && !bytes.Equal(id, loadId) {
+			return fmt.Errorf("-id %v is not equal to pub %v in key.bin", idHex, hex.EncodeToString(loadId))
+		}
 	}
+	if idHex == "" {
+		id = loadId
+	}
+	log.Printf("id=%v", hex.EncodeToString(id))
+
 	return nil
 }
 

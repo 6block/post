@@ -136,10 +136,10 @@ func NewScrypt(opts ...OptionFunc) (*Scrypt, error) {
 
 	if *options.providerID != cCPUProviderID() {
 		gpuMtx.Lock()
+		defer gpuMtx.Unlock()
 	}
 	init, err := cNewInitializer(options)
 	if err != nil {
-		gpuMtx.Unlock()
 		return nil, err
 	}
 
@@ -156,9 +156,9 @@ func (s *Scrypt) Close() error {
 	}
 
 	cFreeInitializer(s.init)
-	if *s.options.providerID != cCPUProviderID() {
-		gpuMtx.Unlock()
-	}
+	// if *s.options.providerID != cCPUProviderID() {
+	// 	gpuMtx.Unlock()
+	// }
 	s.init = nil
 	return nil
 }
