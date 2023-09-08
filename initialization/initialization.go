@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -182,6 +183,7 @@ type Initializer struct {
 	logger            *Logger
 	referenceOracle   *oracle.WorkOracle
 	powDifficultyFunc func(uint64) []byte
+	meta_mtx          sync.RWMutex
 }
 
 func NewInitializer(opts ...OptionFunc) (*Initializer, error) {
@@ -303,22 +305,65 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 	difficulty := init.powDifficultyFunc(numLabels)
 	batchSize := init.opts.ComputeBatchSize
 
-	wo, err := oracle.New(
-		oracle.WithProviderID(init.opts.ProviderID),
-		oracle.WithCommitment(init.commitment),
-		oracle.WithVRFDifficulty(difficulty),
-		oracle.WithScryptParams(init.opts.Scrypt),
-		oracle.WithLogger(init.logger),
-	)
-	if err != nil {
-		return err
+	indexes, err := prepareFileIndexes(init.cfg, init.opts, init.logger)
+	if len(indexes) == 0 {
+		if init.nonce.Load() != nil {
+			init.logger.Info("initialization: completed, found nonce", zap.Uint64("nonce", *init.nonce.Load()))
+			return nil
+		}
+		if layout.NumFiles() < init.opts.TotalFiles(init.cfg.LabelsPerUnit) {
+			init.logger.Info("initialization: no nonce found while computing labels")
+			return nil
+		}
 	}
-	defer wo.Close()
 
-	woReference := init.referenceOracle
-	if woReference == nil {
+	wos := make(map[uint32]*oracle.WorkOracle)
+	var wosReference []*oracle.WorkOracle
+	if init.opts.ProviderIDs != nil {
+		for _, provider := range *init.opts.ProviderIDs {
+			providerId := uint32(provider)
+			wo, err := oracle.New(
+				oracle.WithProviderID(&providerId),
+				oracle.WithCommitment(init.commitment),
+				oracle.WithVRFDifficulty(difficulty),
+				oracle.WithScryptParams(init.opts.Scrypt),
+				oracle.WithLogger(init.logger),
+			)
+			if err != nil {
+				return err
+			}
+			defer wo.Close()
+			wos[providerId] = wo
+
+			cpuProvider := CPUProviderID()
+			woReference, err := oracle.New(
+				oracle.WithProviderID(&cpuProvider),
+				oracle.WithCommitment(init.commitment),
+				oracle.WithVRFDifficulty(difficulty),
+				oracle.WithScryptParams(init.opts.Scrypt),
+				oracle.WithLogger(init.logger),
+			)
+			if err != nil {
+				return err
+			}
+			defer woReference.Close()
+			wosReference = append(wosReference, woReference)
+		}
+	} else if init.opts.ProviderID != nil {
+		wo, err := oracle.New(
+			oracle.WithProviderID(init.opts.ProviderID),
+			oracle.WithCommitment(init.commitment),
+			oracle.WithVRFDifficulty(difficulty),
+			oracle.WithScryptParams(init.opts.Scrypt),
+			oracle.WithLogger(init.logger),
+		)
+		if err != nil {
+			return err
+		}
+		defer wo.Close()
+		wos[*init.opts.ProviderID] = wo
 		cpuProvider := CPUProviderID()
-		woReference, err = oracle.New(
+		woReference, err := oracle.New(
 			oracle.WithProviderID(&cpuProvider),
 			oracle.WithCommitment(init.commitment),
 			oracle.WithVRFDifficulty(difficulty),
@@ -329,17 +374,81 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 			return err
 		}
 		defer woReference.Close()
+		wosReference = append(wosReference, woReference)
+	} else {
+		return errors.New("no provider specified")
 	}
 
-	for i := layout.FirstFileIdx; i <= layout.LastFileIdx; i++ {
-		fileOffset := uint64(i) * layout.FileNumLabels
-		fileNumLabels := layout.FileNumLabels
-		if i == layout.LastFileIdx {
-			fileNumLabels = layout.LastFileNumLabels
+	if len(indexes) != 0 {
+		ch := make(chan int)
+		cancelCtx, cancel := context.WithCancel(context.Background())
+		wg := sync.WaitGroup{}
+		wri := 0
+		for id, wo := range wos {
+			wg.Add(1)
+			go func(i int, id uint32, wo *oracle.WorkOracle) {
+				woReference := wosReference[i]
+
+				{
+				L:
+					for {
+						select {
+						case <-ctx.Done():
+							break L
+						case <-cancelCtx.Done():
+							break L
+						case index := <-ch:
+							init.logger.Info("initFile",
+								zap.Uint32("provider", id),
+								zap.Int("file index", index))
+							fileOffset := uint64(i) * layout.FileNumLabels
+							fileNumLabels := layout.FileNumLabels
+							if index == layout.LastFileIdx {
+								fileNumLabels = layout.LastFileNumLabels
+							}
+							if err := init.initFile(ctx, wo, woReference, index, batchSize, fileOffset, fileNumLabels, difficulty); err != nil {
+								init.logger.Info("initFile",
+									zap.Uint32("provider", id),
+									zap.String("err", err.Error()))
+								break L
+							}
+						}
+					}
+				}
+				init.logger.Info("provider quit",
+					zap.Int("provider", i))
+				wg.Done()
+			}(wri, id, wo)
+			wri = wri + 1
 		}
 
-		if err := init.initFile(ctx, wo, woReference, i, batchSize, fileOffset, fileNumLabels, difficulty); err != nil {
-			return err
+		stop := false
+		{
+		L:
+			for _, i := range indexes {
+				select {
+				case <-ctx.Done():
+					stop = true
+					break L
+				case ch <- i:
+					continue
+				}
+			}
+		}
+		cancel()
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			done <- struct{}{}
+		}()
+		timeout := time.Duration(30) * time.Second
+		select {
+		case <-done:
+			break
+		case <-time.After(timeout):
+		}
+		if stop {
+			return ctx.Err()
 		}
 	}
 
@@ -361,6 +470,7 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 	// continue searching for a nonce
 	defer init.saveMetadata()
 
+	wo := wos[0]
 	for i := *init.lastPosition.Load(); i < math.MaxUint64; i += batchSize {
 		lastPos := i
 		init.lastPosition.Store(&lastPos)
@@ -691,9 +801,13 @@ func (init *Initializer) saveMetadata() error {
 	if init.nonceValue.Load() != nil {
 		v.NonceValue = *init.nonceValue.Load()
 	}
+	init.meta_mtx.Lock()
+	defer init.meta_mtx.Unlock()
 	return SaveMetadata(init.opts.DataDir, &v)
 }
 
 func (init *Initializer) loadMetadata() (*shared.PostMetadata, error) {
+	init.meta_mtx.RLock()
+	defer init.meta_mtx.RUnlock()
 	return LoadMetadata(init.opts.DataDir)
 }
