@@ -401,7 +401,7 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 							init.logger.Info("initFile",
 								zap.Uint32("provider", id),
 								zap.Int("file index", index))
-							fileOffset := uint64(i) * layout.FileNumLabels
+							fileOffset := uint64(index) * layout.FileNumLabels
 							fileNumLabels := layout.FileNumLabels
 							if index == layout.LastFileIdx {
 								fileNumLabels = layout.LastFileNumLabels
@@ -416,7 +416,7 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 					}
 				}
 				init.logger.Info("provider quit",
-					zap.Int("provider", i))
+					zap.Uint32("provider", id))
 				wg.Done()
 			}(wri, id, wo)
 			wri = wri + 1
