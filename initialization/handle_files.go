@@ -15,9 +15,19 @@ func prepareFileIndexes(cfg config.Config, opts config.InitOpts, logger *zap.Log
 	}
 	maxFileIndex := layout.LastFileIdx
 	minFileIndex := layout.FirstFileIdx
+	from := minFileIndex
+	to := maxFileIndex
+	if (opts.FromFileIdx != 0) {
+		from = opts.FromFileIdx
+	}
+	if (opts.ToFileIdx != nil) {
+		to = *opts.ToFileIdx
+	}
 	fileIndexMap := make(map[int]bool, layout.LastFileIdx-layout.FirstFileIdx+1)
 	for i := 0; i <= maxFileIndex; i++ {
-		fileIndexMap[i] = true
+		if (i >= from && i <= to) {
+			fileIndexMap[i] = true
+		}
 	}
 	files, err := GetFiles(opts.DataDir, shared.IsInitFile)
 	for _, file := range files {
