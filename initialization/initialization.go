@@ -441,7 +441,7 @@ func (init *Initializer) Initialize(ctx context.Context) error {
 			wg.Wait()
 			done <- struct{}{}
 		}()
-		timeout := time.Duration(30) * time.Second
+		timeout := time.Duration(8) * time.Hour
 		select {
 		case <-done:
 			break
