@@ -73,9 +73,14 @@ var (
 	logLevel zapcore.Level
 
 	ErrKeyFileExists = errors.New("key file already exists")
+
+	nonces  uint
+	threads uint
 )
 
 func parseFlags() {
+	flag.UintVar(&nonces, "nonces", 16, "post proof nonces")
+	flag.UintVar(&threads, "threads", 1, "post proof threads")
 	flag.BoolVar(&verifyPos, "verify", false, "verify initialized data")
 	flag.Float64Var(&fraction, "fraction", 0.2, "how much % of POS data to verify. Sane values are < 1.0")
 
@@ -308,7 +313,7 @@ func main() {
 	if genProof {
 		log.Println("cli: generating proof as a sanity test")
 
-		proof, proofMetadata, err := proving.Generate(ctx, shared.ZeroChallenge, cfg, logger, proving.WithDataSource(cfg, id, commitmentAtxId, opts.DataDir))
+		proof, proofMetadata, err := proving.Generate(ctx, shared.ZeroChallenge, cfg, logger, proving.WithDataSource(cfg, id, commitmentAtxId, opts.DataDir), proving.WithNonces(nonces), proving.WithThreads(threads))
 		if err != nil {
 			log.Fatalln("proof generation error", err)
 		}
