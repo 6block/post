@@ -63,6 +63,7 @@ func Test_Generate(t *testing.T) {
 			proof, proofMetaData, err := Generate(
 				context.Background(),
 				ch,
+				"",
 				cfg,
 				log,
 				WithDataSource(cfg, nodeId, commitmentAtxId, opts.DataDir),
@@ -125,6 +126,7 @@ func Test_Generate_DetectInvalidParameters(t *testing.T) {
 		_, _, err := Generate(
 			context.Background(),
 			ch,
+			"",
 			cfg,
 			zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)),
 			WithDataSource(cfg, newNodeId, commitmentAtxId, opts.DataDir),
@@ -143,6 +145,7 @@ func Test_Generate_DetectInvalidParameters(t *testing.T) {
 		_, _, err := Generate(
 			context.Background(),
 			ch,
+			"",
 			cfg,
 			zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)),
 			WithDataSource(cfg, nodeId, newAtxId, opts.DataDir),
@@ -160,6 +163,7 @@ func Test_Generate_DetectInvalidParameters(t *testing.T) {
 		_, _, err := Generate(
 			context.Background(),
 			ch,
+			"",
 			newCfg,
 			zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)),
 			WithDataSource(newCfg, nodeId, commitmentAtxId, opts.DataDir),
@@ -210,6 +214,7 @@ func Test_Generate_TestNetSettings(t *testing.T) {
 	proof, proofMetaData, err := Generate(
 		context.Background(),
 		ch,
+		"",
 		cfg,
 		log,
 		WithDataSource(cfg, nodeId, commitmentAtxId, opts.DataDir),
