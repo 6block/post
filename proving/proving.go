@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 )
 
-func Generate(ctx context.Context, ch shared.Challenge, postServer string, cfg config.Config, logger *zap.Logger, opts ...OptionFunc) (*shared.Proof, *shared.ProofMetadata, error) {
+func Generate(ctx context.Context, ch shared.Challenge, postServer string, priority uint, cfg config.Config, logger *zap.Logger, opts ...OptionFunc) (*shared.Proof, *shared.ProofMetadata, error) {
 	options := option{
 		threads:  1,
 		nonces:   16,
@@ -34,7 +34,7 @@ func Generate(ctx context.Context, ch shared.Challenge, postServer string, cfg c
 		provingOpts = append(provingOpts, postrs.WithPowCreator(options.powCreatorId))
 	}
 
-	result, err := postrs.GenerateProof(options.datadir, postServer, ch, logger, options.nonces, options.threads, cfg.K1, cfg.K2, cfg.PowDifficulty, options.powFlags, provingOpts...)
+	result, err := postrs.GenerateProof(options.datadir, postServer, priority, ch, logger, options.nonces, options.threads, cfg.K1, cfg.K2, cfg.PowDifficulty, options.powFlags, provingOpts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generating proof: %w", err)
 	}
