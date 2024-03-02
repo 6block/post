@@ -71,7 +71,7 @@ func GenerateProof(dataDir string, postServer string, priority uint, challenge [
 	defer C.free(unsafe.Pointer(dataDirPtr))
 
 	postServerPtr := C.CString(postServer)
-	defer C.free(unsafe.Pointer(&postServerPtr))
+	defer C.free(unsafe.Pointer(postServerPtr))
 
 	challengePtr := C.CBytes(challenge)
 	defer C.free(challengePtr)
