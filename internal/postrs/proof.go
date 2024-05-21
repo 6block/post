@@ -56,7 +56,7 @@ func WithPowCreator(id []byte) PostOptionFunc {
 	}
 }
 
-func GenerateProof(dataDir string, postServer string, priority uint, challenge []byte, logger *zap.Logger, nonces, threads uint, K1, K2 uint32, powDifficulty [32]byte, powFlags PowFlags, options ...PostOptionFunc) (*shared.Proof, error) {
+func GenerateProof(dataDir string, postServer string, powResponse string, challenge []byte, logger *zap.Logger, nonces, threads uint, K1, K2 uint32, powDifficulty [32]byte, powFlags PowFlags, options ...PostOptionFunc) (*shared.Proof, error) {
 	opts := postOptions{}
 	for _, o := range options {
 		if err := o(&opts); err != nil {
@@ -75,6 +75,9 @@ func GenerateProof(dataDir string, postServer string, priority uint, challenge [
 
 	challengePtr := C.CBytes(challenge)
 	defer C.free(challengePtr)
+
+	powResponsePtr := C.CString(powResponse)
+	defer C.free(unsafe.Pointer(powResponsePtr))
 
 	var powCreatorId unsafe.Pointer
 	if opts.powCreatorId != nil {
@@ -100,7 +103,7 @@ func GenerateProof(dataDir string, postServer string, priority uint, challenge [
 		powFlags,
 		(*C.uchar)(powCreatorId),
 		postServerPtr,
-		C.size_t(priority),
+		powResponsePtr,
 	)
 
 	if cProof == nil {
