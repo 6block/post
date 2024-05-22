@@ -16,8 +16,8 @@ import (
 
 func GenerateKPow(ctx context.Context, ch shared.Challenge, postServer string, priority uint, cfg config.Config, logger *zap.Logger, opts ...OptionFunc) (*string, error) {
 	options := option{
-		threads:  1,
-		nonces:   16,
+		threads:  2,
+		nonces:   288,
 		powFlags: config.DefaultProvingPowFlags(),
 	}
 	for _, opt := range opts {
@@ -39,8 +39,8 @@ func GenerateKPow(ctx context.Context, ch shared.Challenge, postServer string, p
 
 func Generate(ctx context.Context, ch shared.Challenge, postServer string, powResponse string, cfg config.Config, logger *zap.Logger, opts ...OptionFunc) (*shared.Proof, *shared.ProofMetadata, error) {
 	options := option{
-		threads:  1,
-		nonces:   16,
+		threads:  2,
+		nonces:   288,
 		powFlags: config.DefaultProvingPowFlags(),
 	}
 	for _, opt := range opts {
