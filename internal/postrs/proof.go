@@ -87,13 +87,15 @@ func GeneratePow(dataDir string, postServer string, priority uint, challenge []b
 		config.pow_difficulty[i] = C.uchar(b)
 	}
 
-	cPow := C.generate_pow(dataDirPtr, challengePtr, config, C.size_t(nonces), powFlags, postServerPtr, C.size_t(priority))
+	cPow := C.generate_pow(dataDirPtr, (*C.uchar)(challengePtr), config, C.size_t(nonces), powFlags, postServerPtr, C.size_t(priority))
 
-	if cPow == nil {
+	goStr := C.GoString(cPow)
+	C.free(unsafe.Pointer(cPow))
+	if &goStr == nil {
 		return nil, fmt.Errorf("got nil")
 	}
 
-	return &cPow, nil
+	return &goStr, nil
 }
 
 func GenerateProof(dataDir string, postServer string, powResponse string, challenge []byte, logger *zap.Logger, nonces, threads uint, K1, K2 uint32, powDifficulty [32]byte, powFlags PowFlags, options ...PostOptionFunc) (*shared.Proof, error) {
